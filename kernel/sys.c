@@ -290,3 +290,12 @@ int sys_umask(int mask)
 	current->umask = mask & 0777;
 	return (old);
 }
+
+int sys_sleep(unsigned int seconds)
+{
+	sys_signal(SIGALRM, SIG_IGN, NULL);
+	sys_alarm(seconds);
+	sys_pause();
+
+	return 0;
+}
