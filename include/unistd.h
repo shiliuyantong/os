@@ -144,6 +144,11 @@
 #define __NR_lstat	84
 #define __NR_readlink	85
 #define __NR_uselib	86
+#define __NR_execve2 87
+#define __NR_getdents 88
+#define __NR_pipe2 89
+#define __NR_sleep 90
+#define __NR_getcwd 91
 #define _syscall0(type,name) \
 type name(void) \
 { \
