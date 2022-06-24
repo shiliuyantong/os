@@ -303,60 +303,58 @@ int sys_sleep(unsigned int seconds)
 long sys_getcwd(char *buf, size_t size)
 {
     if (buf == NULL)
-    {
         buf = (char *)malloc(size);
-    }
 
     char path[BUF_MAX], cwd[BUF_MAX];
-    DIR *dirp;                     // dir_info
-    struct dirent *dp;             // dir_file_info
-    struct stat *sb, *sb_p, *sb_c; // stat buff(detailed_file_info)
-    dev_t dev;
-    ino_t ino;
+    struct buffer_head *bh;
+    struct m_inode *inode_cur, *inode_root;
+    struct dir_entry *dir_cur, *dir_temp;
+    unsigned short num_inode_cur, num_inode_root;
+    int block_cur, idev_cur, entries, i;
 
-    while (1)
+    inode_cur = current->pwd;
+    inode_root = current->root;
+    block_cur = inode_cur->i_zone[0];
+    idev_cur = inode_cur->i_dev;
+
+    bh = bread(idev_cur, block_cur);
+    dir_cur = (struct dir_entry *)(bh->b_data);
+    num_inode_cur = dir_cur->inode;
+    num_inode_root = (++dir_cur)->inode;
+
+    while (inode_cur != inode_root)
     {
-        // Current dir_info
-        if (stat(".", sb) == -1)
-            printf("Stat error, sb.");
-        dev = sb->st_dev;
-        ino = sb->st_ino;
+        inode_cur = iget(idev_cur, num_inode_root);
+        block_cur = inode_cur->i_zone[0];
+        idev_cur = inode_cur->i_dev;
+        bh = bread(idev_cur, block_cur);
+        dir_cur = (struct dir_entry *)(bh->b_data);
+        dir_temp = dir_cur;
 
-        // Parent
-        if ((dirp = opendir("..")) == NULL)
-            printf("Opendir error, dirp.");
-        if (stat("..", sb_p) == -1)
-            printf("Stat error, sb_p.");
-
-        // Whether reach
-        if (sb_p->st_dev == dev && sb_p->st_ino == ino)
-            break;
-
-        // Search in dir_parent
-        while ((dp = readdir(dirp)) != NULL)
+        entries = inode_cur->i_size / sizeof(struct dir_entry);
+        for (i = 0; i < entries; i++, dir_temp++)
         {
-            snprintf(path, BUF_MAX, "../%s", dp->d_name);
-            if (stat(path, sb_c) == -1)
-                printf("Stat error, sb_c.");
-
-            // Find!
-            if (sb_c->st_dev == dev && sb_c->st_ino == ino)
+            if (dir_temp->inode == num_inode_cur)
             {
                 memset(cwd, 0, sizeof(cwd));
 
-                stract(cwd, "/");
-                strcat(cwd, dp->d_name);
-                strcat(cwd, buf);
-                strncpy(buf, cwd, BUF_MAX);
+                strcat(cwd, "/");
+                strcat(cwd, dir_temp->name);
+                strcat(cwd, path);
+                strcpy(path, cwd);
 
                 break;
             }
         }
 
-        // Change dir_grandparent
-        closedir(dirp);
-        chdir("..");
+        num_inode_cur = num_inode_root;
+        num_inode_root = (++dir_cur)->inode;
     }
+
+    size_t len = strlen(path);
+    char *p = buf;
+    for (i = 0; i < len; ++i)
+        put_fs_byte(path[i], p++);
 
     return buf;
 }
