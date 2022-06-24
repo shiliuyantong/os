@@ -299,3 +299,64 @@ int sys_sleep(unsigned int seconds)
 
 	return 0;
 }
+
+long sys_getcwd(char *buf, size_t size)
+{
+    if (buf == NULL)
+    {
+        buf = (char *)malloc(size);
+    }
+
+    char path[BUF_MAX], cwd[BUF_MAX];
+    DIR *dirp;                     // dir_info
+    struct dirent *dp;             // dir_file_info
+    struct stat *sb, *sb_p, *sb_c; // stat buff(detailed_file_info)
+    dev_t dev;
+    ino_t ino;
+
+    while (1)
+    {
+        // Current dir_info
+        if (stat(".", sb) == -1)
+            printf("Stat error, sb.");
+        dev = sb->st_dev;
+        ino = sb->st_ino;
+
+        // Parent
+        if ((dirp = opendir("..")) == NULL)
+            printf("Opendir error, dirp.");
+        if (stat("..", sb_p) == -1)
+            printf("Stat error, sb_p.");
+
+        // Whether reach
+        if (sb_p->st_dev == dev && sb_p->st_ino == ino)
+            break;
+
+        // Search in dir_parent
+        while ((dp = readdir(dirp)) != NULL)
+        {
+            snprintf(path, BUF_MAX, "../%s", dp->d_name);
+            if (stat(path, sb_c) == -1)
+                printf("Stat error, sb_c.");
+
+            // Find!
+            if (sb_c->st_dev == dev && sb_c->st_ino == ino)
+            {
+                memset(cwd, 0, sizeof(cwd));
+
+                stract(cwd, "/");
+                strcat(cwd, dp->d_name);
+                strcat(cwd, buf);
+                strncpy(buf, cwd, BUF_MAX);
+
+                break;
+            }
+        }
+
+        // Change dir_grandparent
+        closedir(dirp);
+        chdir("..");
+    }
+
+    return buf;
+}
