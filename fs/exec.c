@@ -365,28 +365,28 @@ int sys_execve2(const char* path, char* argv[], char* envp[])
 {
 	return 0;
 }
-//本文件需要包含unistd.h,里面定义了linux_dirent结构
+//本文件需要包含unistd.h
 int sys_getdents(unsigned int fd,struct linux_dirent* dirp,unsigned int count){
 	struct buffer_head* bh;
 	struct dir_entry* de;
-	struct linux_dirent p;
-	int i, k, ct = 0;
+	struct linux_dirent* p = (struct linux_dirent*)malloc(sizeof(struct linux_dirent));
+	int i, j, k = 0;
 	int length = sizeof(struct linux_dirent);
 	bh = bread(current->filp[fd]->f_inode->i_dev, current->filp[fd]->f_inode->i_zone[0]);
-	de=(struct dir_entry*) bh->b_data;
-	for (i = 0; i < 100; i++) {
-		if (de->inode == 0 || (i + 1) * length > count) break;
-		p.d_off = 0;
-		p.d_reclen = length;
-		p.d_ino = de[i].inode;
-		strcpy(p.d_name, de[i].name);
-		for(k = 0; k < length; k++) {
-			put_fs_byte(((char*)&p)[k],((char*)dirp + ct));
-			ct++;
+	de=(struct dir_entry*) bh->b_data;//dir_entry{unsigned short inode;char name[NAME_LEN];}
+	for (i = 0;de->inode&&(i+1)*length<=count; i++) {
+		p->d_ino = de[i].inode;
+		p->d_off = 0;//没有用到
+		p->d_reclen = length;
+		strcpy(p->d_name, de[i].name);
+		for(j = 0; j < length; j++) {
+			put_fs_byte(((char*)p)[j],((char*)dirp + k));
+			k++;
 		}
 	}
-	return ct;
+	return k;
 }
+
 //需要包含signal.h
 int sys_sleep(unsigned int seconds)
 {
@@ -403,4 +403,23 @@ void print_nr(int sid)
 {
 	if (sid > 86)
 		printk(" --syscall: sid=%d, pid=%d\n", sid, current->pid);
+}
+int sys_pipe2(void)
+{
+	return 0;
+}
+
+long sys_mmap(void)
+{
+	return 0;
+}
+
+int sys_munmap(void)
+{
+	return 0;
+}
+
+int sys_clone(void)
+{
+	return 0;
 }
