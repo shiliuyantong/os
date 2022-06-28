@@ -1,1 +1,1 @@
-The final version of linux_0.11 kernel with additional system_call
+扩充Linux 0.11版本内核使其支持ELF可执行文件格式
