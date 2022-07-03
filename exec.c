@@ -177,7 +177,7 @@ static unsigned long change_ldt(unsigned long text_size, unsigned long *page) {
 }
 
 /*
- * 'execve_elf()' by lxp & lzq
+ * execve_elf
  */
 int execve_elf(unsigned int *eip, unsigned long *page, struct m_inode *inode, char **argv, char **envp) {
     struct elf32_ehdr ehdr;
@@ -192,10 +192,20 @@ int execve_elf(unsigned int *eip, unsigned long *page, struct m_inode *inode, ch
     set_fs(get_ds());
     block_read(inode->i_dev, &offset, &ehdr, 52);
     set_fs(oldfs);
-    if (ehdr.ident[4] != 0x1 || ehdr.ident[5] != 0x1 || ehdr.ident[6] != 0x1) {
-        printk("incompatible ELF version\n");
+    
+    if (ehdr.ident[4] != 0x1){
+        printk("class error: not 32-bit objects\n");
         return 0;
     }
+    if (ehdr.ident[5] != 0x1){
+        printk("data error: not little endian\n");
+        return 0;
+    }
+    if (ehdr.ident[6] != 0x1){
+        printk("version error: elf header version not supportted\n");
+        return 0;
+    }
+    
     if (ehdr.type != 0x2) {
         printk("not executable\n");
         return 0;
@@ -226,18 +236,19 @@ int execve_elf(unsigned int *eip, unsigned long *page, struct m_inode *inode, ch
     current->end_code = 0;
     current->end_data = 0;
     current->brk = 0;
-    for (i = 0; i < ehdr.phdr_num && bid < 7; ++i) {
+    for (i = 0; i < ehdr.phdr_num; ++i) {
         if ((nsize = block_read(inode->i_dev, &offset, &phdr, 32)) != 32 || !(offset & (BLOCK_SIZE - 1))) {
-            offset = inode->i_zone[++bid] * BLOCK_SIZE;
-            if (bid > 7)
-                break;
+            offset = bmap(inode, ++bid) * BLOCK_SIZE;
             block_read(inode->i_dev, &offset, (char *)&phdr + nsize, 32 - nsize);
         }
         if (phdr.type == 0x1) { // PT_LOAD type
             if ((phdr.flags & 0x1) && current->end_code < phdr.vaddr + phdr.memsize)
                 current->end_code = phdr.vaddr + phdr.memsize;
-            if (phdr.vaddr + phdr.memsize <= 0x4000000 && current->end_data < phdr.vaddr + phdr.memsize)
+            if (phdr.vaddr + phdr.memsize < 0x4000000 && current->end_data < phdr.vaddr + phdr.memsize)
                 current->end_data = phdr.vaddr + phdr.memsize;
+            
+            // debug
+            printk("execve_elf: vaddr = 0x%08x\n", phdr.vaddr);
         }
     }
     current->brk = current->end_data;
@@ -256,6 +267,7 @@ int execve_elf(unsigned int *eip, unsigned long *page, struct m_inode *inode, ch
 
     eip[0] = ehdr.entry;
     eip[3] = p;
+    
     return 0;
 }
 
