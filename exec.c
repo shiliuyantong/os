@@ -189,23 +189,17 @@ static unsigned long change_ldt(unsigned long text_size,unsigned long * page)
 
 void load_elf(Elf32_Ehdr* ehdr,Elf32_Phdr* phdr,struct m_inode* inode)
 {
-	int bid,nsize;
-	bid = 0;
-	offset = inode->i_zone[bid] * BLOCK_SIZE;//转化成block_read中文件偏移量
+	unsigned int i,offset,oldfs;
+	offset = inode->i_zone[0] * BLOCK_SIZE;//转化成block_read中文件偏移量
     oldfs = get_fs();
     set_fs(get_ds());
     block_read(inode->i_dev, &offset, &ehdr, 52);
-	 for (i = 0; i < ehdr.phnum && bid < 7; ++i) {
-        if ((nsize = block_read(inode->i_dev, &offset, &phdr, 32)) != 32 || !(offset & (BLOCK_SIZE - 1))) {
-            offset = inode->i_zone[++bid] * BLOCK_SIZE;
-            if (bid > 7)
-                break;
-            block_read(inode->i_dev, &offset, &phdr + nsize, 32 - nsize);
-        }
-        if (phdr->p_type == 0x1) { // PT_LOAD type
-            if ((phdr->p_flags & 0x1) && current->end_code < phdr->p_vaddr + phdr->p_memsz)
+	 for (i = 0; i < ehdr->e_phnum; i++) {
+        block_read(inode->i_dev, &offset, &phdr, 32);
+        if (phdr->p_type == 0x1) { // PT_LOAD type .text .data
+            if (phdr->p_flags & 0x1) // 可执行为代码段 
                 current->end_code = phdr->p_vaddr + phdr->p_memsz;
-            if (phdr->p_vaddr + phdr->p_memsz <= 0x4000000 && current->end_data < phdr->p_vaddr + phdr->p_align)
+            else //数据段
                 current->end_data = phdr->p_vaddr + phdr->p_memsz;
         }
     }
@@ -217,7 +211,6 @@ int exec_elf(unsigned int *eip, unsigned long *page, struct m_inode *inode, char
     Elf32_Ehdr ehdr;
     Elf32_Phdr phdr;
     struct buffer_head *bh;
-    unsigned long offset;
     int i, argc, envc, oldfs;
     unsigned long p = PAGE_SIZE * MAX_ARG_PAGES - 4;
     envc = count(envp);
@@ -242,14 +235,11 @@ int exec_elf(unsigned int *eip, unsigned long *page, struct m_inode *inode, char
     p += change_ldt(current->end_code, page) - MAX_ARG_PAGES * PAGE_SIZE;
     p = (unsigned long)create_tables((char *)p, argc, envc);
     current->start_stack = p & 0xfffff000;
-    if (i & S_ISUID)
-        current->euid = inode->i_uid;
-    if (i & S_ISUID)
-        current->egid = inode->i_gid;
+    current->euid = inode->i_uid;
+    current->egid = inode->i_gid;
     i = current->end_data;
     while (i & 0xfff)
         put_fs_byte(0, (char *)(i++));
-
     eip[0] = ehdr.e_entry;
     eip[3] = p;
     return 0;
