@@ -27,6 +27,7 @@
 #include <linux/sched.h>
 #include <linux/head.h>
 #include <linux/kernel.h>
+#include <elf.h>
 
 volatile void do_exit(long code);
 
