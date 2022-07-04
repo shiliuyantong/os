@@ -381,7 +381,39 @@ void do_no_page(unsigned long error_code,unsigned long address)
 	if (!(page = get_free_page()))
 		oom();
 /* remember that 1 block is used for header */
-	block = 1 + tmp/BLOCK_SIZE;
+	
+        struct buffer_head *bh;
+        unsigned long offset;
+        int nsize, bid, oldfs;
+        struct elf32_ehdr ehdr;
+        struct elf32_phdr phdr;
+
+        offset = bmap(current->executable, bid = 0) * BLOCK_SIZE;
+        oldfs = get_fs();
+        set_fs(get_ds());
+        nsize = block_read(current->executable->i_dev, &offset, &ehdr, 52);
+        if (nsize == 52 && *(unsigned long *)ehdr.ident == 0x464c457f) {
+            // elf
+            for (i = 0; i < ehdr.phdr_num; ++i) {
+                if ((nsize = block_read(current->executable->i_dev, &offset, &phdr, 32)) != 32 ||
+                    !(offset & (BLOCK_SIZE - 1))) {
+                    offset = bmap(current->executable, ++bid) * BLOCK_SIZE;
+                    block_read(current->executable->i_dev, &offset, (char *)&phdr + nsize, 32 - nsize);
+                }
+                if (tmp >= (phdr.vaddr & ~(phdr.align - 1)) && tmp < phdr.vaddr + phdr.memsize) {
+                    tmp = tmp + phdr.offset - phdr.vaddr;
+                    break;
+                }
+            }
+            block = tmp / BLOCK_SIZE;
+            // debug
+            printk("do_no_page: address = 0x%08x\n", address);
+            printk("do_no_page: block = %d\n", block);
+        } else
+            block = 1 + tmp / BLOCK_SIZE; // a.out
+
+        set_fs(oldfs);
+	
 	for (i=0 ; i<4 ; block++,i++)
 		nr[i] = bmap(current->executable,block);
 	bread_page(page,current->executable->i_dev,nr);
